@@ -1,0 +1,30 @@
+# Compiler
+CC = g++
+
+# Flags
+CFLAGS = -std=c++11 -O2 -Wall -Wextra
+CFLAGS += -g -fPIC
+
+LIBS = -lzmq
+LIBDIRS =
+INCLUDES =
+
+# Executable/reconstruction objects
+WORKER_OBJS = worker.o
+COMMON_OBJS =
+
+# Executables
+PROGS = worker
+
+.PHONY: default clean
+
+all: $(PROGS)
+
+worker: $(COMMON_OBJS) $(WORKER_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(WORKER_OBJS) $(COMMON_OBJS) $(INCLUDES) $(LIBDIRS) $(LIBS)
+
+worker.o: worker.cc
+	$(CC) $(CFLAGS) -c worker.cc $(INCLUDES)
+
+clean:
+	rm -f $(PROGS) *.o *.a *~ *.lst *.tmp .pure *.bak *.log
