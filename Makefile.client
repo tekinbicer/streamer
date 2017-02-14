@@ -1,0 +1,30 @@
+# Compiler
+CC = gcc
+
+# Flags
+CFLAGS = -std=gnu99 -O2 -Wall -Wextra
+CFLAGS += -g -fPIC
+
+LIBS = -lzmq
+LIBDIRS = -L/home/bicer/local/lib
+INCLUDES = -I/home/bicer/local/include
+
+# Executable/reconstruction objects
+CLIENT_OBJS = client.o
+COMMON_OBJS =
+
+# Executables
+PROGS = client
+
+.PHONY: default clean
+
+all: $(PROGS)
+
+client: $(COMMON_OBJS) $(CLIENT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(CLIENT_OBJS) $(COMMON_OBJS) $(INCLUDES) $(LIBDIRS) $(LIBS)
+
+client.o: client.c
+	$(CC) $(CFLAGS) -c client.c $(INCLUDES)
+
+clean:
+	rm -f $(PROGS) *.o *.a *~ *.lst *.tmp .pure *.bak *.log
