@@ -10,21 +10,21 @@ LIBDIRS = -L/home/bicer/local/lib
 INCLUDES = -I/home/bicer/local/include
 
 # Executable/reconstruction objects
-CLIENT_OBJS = client.o
+SERVER_OBJS = server.o
 COMMON_OBJS =
 
 # Executables
-PROGS = client
+PROGS = server
 
 .PHONY: default clean
 
 all: $(PROGS)
 
-client: $(COMMON_OBJS) $(CLIENT_OBJS)
-	$(CC) $(CFLAGS) -o $@ $(CLIENT_OBJS) $(COMMON_OBJS) $(INCLUDES) $(LIBDIRS) $(LIBS)
+server: $(COMMON_OBJS) $(SERVER_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(SERVER_OBJS) $(COMMON_OBJS) $(INCLUDES) $(LIBDIRS) $(LIBS)
 
-client.o: client.c
-	$(CC) $(CFLAGS) -c client.c $(INCLUDES)
+server.o: server.c
+	$(CC) $(CFLAGS) -c server.c $(INCLUDES)
 
 clean:
 	rm -f $(PROGS) *.o *.a *~ *.lst *.tmp .pure *.bak *.log
