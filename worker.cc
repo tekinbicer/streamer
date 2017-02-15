@@ -1,48 +1,45 @@
-//   Request-reply service in C++
-//   Connects REP socket to tcp://localhost:5560
-//   Expects "Hello" from client, replies with "World"
-//
-// Olivier Chamoux <olivier.chamoux@fr.thalesgroup.com>
-
+//   Request worker in C++
 
 #include "zhelpers.hpp"
 #include "mpi.h"
 #include <string>
 
-#define REP_ADDR "tcp://164.54.143.3:"
-#define S_PORT 5560
+#define ADDR_PREFIX "tcp://"
 
 int main (int argc, char *argv[])
 {
+  if(argc!=3) {
+    printf("Usage: %s <dest-ip-address=164.54.143.3> <dest-port=5560>\n", argv[0]);
+    exit(0);
+  }
+
   // Setup MPI
   int my_rank, world_size;
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
+  std::string server_addr(ADDR_PREFIX);
+  int dest_port = atoi(argv[2]);
+  std::stringstream addr_stream;
+  addr_stream << server_addr << argv[1] << ":" << (dest_port+my_rank);
+  std::cout << "Destination address=" << addr_stream.str() << std::endl;
+
   zmq::context_t context(1);
 
-  std::stringstream addr_stream;
-  std::string rep_addr(REP_ADDR);
-  int starting_port = S_PORT;
-  addr_stream << rep_addr << (starting_port+my_rank);
-  zmq::socket_t socket_rep(context, ZMQ_REP);
-  socket_rep.connect(addr_stream.str());
-
-  // Wait for the initial greeting
-  std::string msg_rep = s_recv(socket_rep);
-  std::cout << "Client says: " << msg_rep << std::endl;
+  zmq::socket_t server(context, ZMQ_REQ);
+  server.connect(addr_stream.str());
 
   // Introduce yourself
-  s_send(socket_rep, std::to_string((long long)my_rank));
+  s_send(server, std::to_string((long long)my_rank));
 
   // Check if server has any projection
-  msg_rep = s_recv(socket_rep);
-  std::cout << "Rep socket msg=" << msg_rep << std::endl;
+  std::string msg = s_recv(server);
+  std::cout << "Server replied=" << msg << std::endl;
 
   // Say you received it
-  std::string msg = std::string(std::to_string((long long)my_rank) + ": I received it");
-  s_send(socket_rep, msg);
+  msg = std::string("[" + std::to_string((long long)my_rank) + "]: I received the projection");
+  s_send(server, msg);
   
   MPI_Finalize();
 }
