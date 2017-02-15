@@ -1,13 +1,13 @@
 # Compiler
-CC = g++
+CC = mpicxx
 
 # Flags
 CFLAGS = -std=c++11 -O2 -Wall -Wextra
 CFLAGS += -g -fPIC
 
 LIBS = -lzmq
-LIBDIRS =
-INCLUDES =
+LIBDIRS = -L/home/bicer/local/lib
+INCLUDES = -I/home/bicer/local/include
 
 # Executable/reconstruction objects
 WORKER_OBJS = worker.o
