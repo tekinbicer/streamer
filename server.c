@@ -1,8 +1,8 @@
 //   Reply server in C
 #include "zhelpers.h"
 
-#define N 1024
-#define P 180
+#define N 16
+#define P 18
 
 typedef struct {
   float theta; // theta value of this projection
@@ -62,7 +62,7 @@ int main (int argc, char *argv[])
   int n_workers = atoi(argv[3]);
 
   void *context = zmq_ctx_new();
-  void **workers = malloc(n_workers*sizeof(workers)); assert(workers!=NULL);
+  void **workers = malloc(n_workers*sizeof(**workers)); assert(workers!=NULL);
 
   int dims[3]= {P, N, N};
   int16_t *data = malloc(sizeof(*data)*P*N*N); assert(data!=NULL);
@@ -126,6 +126,8 @@ int main (int argc, char *argv[])
   // All the projections are finished
   // TODO: Send a finished signal to the workers before closing the sockets
 
+
+  // Cleanup
   for(int i=0; i<n_workers; ++i){
     zmq_close (workers[i]);
   }
