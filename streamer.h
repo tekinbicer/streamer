@@ -1,7 +1,11 @@
 #ifndef _STREAMER_H
 #define _STREAMER_H
 
+#define TRACE_DATA 0x00000001
+#define TRACE_FIN  0x00000000
+
 struct _tomo_msg_str {
+  uint32_t type;
   float theta; // theta value of this projection
   int beg_sinogram; // beginning sinogram id
   int n_sinogram; // # Sinograms
@@ -11,6 +15,6 @@ struct _tomo_msg_str {
                   // number of rays in data=n_sinogram*n_rays_per_proj_col
 };
 
-typedef struct tomo_msg_str tomo_msg_t;
+typedef struct _tomo_msg_str tomo_msg_t;
 
 #endif  // _STREAMER_H
