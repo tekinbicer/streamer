@@ -1,18 +1,9 @@
 //   Reply server in C
 #include "zhelpers.h"
+#include "streamer.h"
 
 #define N 1024
 #define P 180
-
-typedef struct {
-  float theta; // theta value of this projection
-  int beg_sinogram; // beginning sinogram id
-  int n_sinogram; // # Sinograms
-  // int nprojs=1; // Always projection by projection
-  int n_rays_per_proj_col; // # rays per projection column
-  int16_t *data;  // real projection data
-                  // number of rays in data=n_sinogram*n_rays_per_proj_col
-} tomo_msg_t;
 
 /*
  * data: pointer to generated data [projection][column][column]
