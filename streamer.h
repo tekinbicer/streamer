@@ -6,12 +6,13 @@
 
 struct _tomo_msg_str {
   uint32_t type;
+  int projection_id;
   float theta; // theta value of this projection
   int beg_sinogram; // beginning sinogram id
   int n_sinogram; // # Sinograms
   // int nprojs=1; // Always projection by projection
   int n_rays_per_proj_col; // # rays per projection column
-  int16_t *data;  // real projection data
+  int16_t data[];  // real projection data
                   // number of rays in data=n_sinogram*n_rays_per_proj_col
 };
 
