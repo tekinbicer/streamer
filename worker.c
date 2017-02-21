@@ -9,7 +9,7 @@ tomo_msg_t* trace_receive_msg(void *server){
     int rc = zmq_msg_init(&zmsg); assert(rc==0);
     rc = zmq_msg_recv(&zmsg, server, 0); assert(rc!=-1);
 
-    size_t data_size = zmq_msg_size(&zmsg)-sizeof(tomo_msg_t);
+    size_t data_size = zmq_msg_size(&zmsg)-(sizeof(tomo_msg_t));
     tomo_msg_t *msg = malloc(sizeof(*msg)+data_size);
     // Zero-copy would have been better
     memcpy(msg, zmq_msg_data(&zmsg), zmq_msg_size(&zmsg));
