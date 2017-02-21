@@ -9,10 +9,10 @@ tomo_msg_t* trace_receive_msg(void *server){
     int rc = zmq_msg_init(&zmsg); assert(rc==0);
     rc = zmq_msg_recv(&zmsg, server, 0); assert(rc!=-1);
 
-    tomo_msg_t *msg = malloc(sizeof(*msg));
-    assert(zmq_msg_size(&zmsg)==sizeof(*msg));
+    size_t data_size = zmq_msg_size(&zmsg)-sizeof(tomo_msg_t);
+    tomo_msg_t *msg = malloc(sizeof(*msg)+data_size);
     // Zero-copy would have been better
-    memcpy(msg, zmq_msg_data(&zmsg), sizeof(*msg));
+    memcpy(msg, zmq_msg_data(&zmsg), zmq_msg_size(&zmsg));
     zmq_msg_close(&zmsg);
 
     return msg;
@@ -33,16 +33,25 @@ int main (int argc, char *argv[])
 
   int dest_port = atoi(argv[2]);
   char addr[64];
-  snprintf(addr, 64, "tcp://%s:%d", argv[1], dest_port);
-  printf("Destination address=%s\n", addr);
+  snprintf(addr, 64, "tcp://%s:%d", argv[1], dest_port+my_rank);
+  printf("[%d] Destination address=%s\n", my_rank, addr);
 
   // Connect to server 
   void *context = zmq_ctx_new();
   void *server = zmq_socket(context, ZMQ_REQ);
   zmq_connect(server, addr);
 
-  // Introduce yourself
+  // Tell how many processes there is to server
   char rank_str[16];
+  if(my_rank==0){
+    snprintf(rank_str, 16, "%d", world_size);
+    s_send(server, rank_str);
+    char *str = s_recv(server);
+    printf("Server received # of processes, replied: %s", str);
+    free(str);
+  }
+
+  // Introduce yourself
   snprintf(rank_str, 16, "%d", my_rank);
   s_send(server, rank_str);
 
@@ -51,8 +60,10 @@ int main (int argc, char *argv[])
   while((msg=trace_receive_msg(server))->type){
     // Say you received it
     char ack_msg[256];
-    snprintf(ack_msg, 256, "[%d]: I received the projections", my_rank);
+    snprintf(ack_msg, 256, "[%d]: I received the projection=%d; beginning sinogram=%d; # sinograms=%d", 
+      my_rank, msg->projection_id, msg->beg_sinogram, msg->n_sinogram);
     s_send(server, ack_msg);
+    printf("%s\n", ack_msg);
 
     // Do something with the data
     for(int i=0; i<msg->n_sinogram; ++i){
@@ -63,7 +74,6 @@ int main (int argc, char *argv[])
     }
 
     // Clean-up message
-    free(msg->data);
     free(msg);
   }
 
