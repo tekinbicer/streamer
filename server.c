@@ -11,14 +11,14 @@
  * theta: pointer to theta values of projections
  * n_procs: number of processes
  *
- * returns msgs to be sent to the processes. tomo_msg_t[P][ranks_msg]
+ * returns msgs to be sent to the processes. &tomo_msg_t[P][ranks_msg]
  * */
-tomo_msg_t** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks){
+tomo_msg_t*** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks){
   int nsin = dims[1]/n_ranks;
   int c_remaining = dims[1]%n_ranks;
 
-  tomo_msg_t **msgs = malloc(P*sizeof(*msgs));
-  for(int i=0; i<P; ++i) msgs[i] = malloc(n_ranks*sizeof(*msgs));
+  tomo_msg_t ***msgs = malloc(P*sizeof(tomo_msg_t**));
+  for(int i=0; i<P; ++i) msgs[i] = malloc(n_ranks*sizeof(tomo_msg_t*));
 
   int curr_sinogram_id = 0;
   for(int i=0; i<P; ++i){
@@ -26,17 +26,21 @@ tomo_msg_t** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks){
     curr_sinogram_id = 0;
 
     for(int j=0; j<n_ranks; ++j){
-      msgs[i][j].theta = theta[i];
-      msgs[i][j].beg_sinogram = curr_sinogram_id;
       int r = ((remaining--) > 0) ? 1 : 0;
-      msgs[i][j].n_sinogram = nsin+r;
-      msgs[i][j].n_rays_per_proj_col = dims[2];
-      size_t msg_size = sizeof(*data)*(nsin+r)*dims[2];
-      msgs[i][j].data = malloc(msg_size);
-      memcpy(msgs[i][j].data, (data+i*dims[2]*dims[2]) + // Current projection
-                                     curr_sinogram_id*dims[2], 
-                                     msg_size);  // Current sinogram
-      curr_sinogram_id += nsin+r;
+      size_t data_size = sizeof(*data)*(nsin+r)*dims[2];
+      tomo_msg_t *msg = malloc(sizeof(tomo_msg_t)+data_size);
+     
+      msg->type = TRACE_DATA;
+      msg->projection_id = i;
+      msg->theta = theta[i];
+      msg->beg_sinogram = curr_sinogram_id;
+      msg->n_sinogram = nsin+r;
+      msg->n_rays_per_proj_col = dims[2];
+      memcpy(msg->data, (data+i*dims[2]*dims[2]) + // Current projection
+                         curr_sinogram_id*dims[2], // Current sinogram
+                        data_size);
+      msgs[i][j]=msg;
+      curr_sinogram_id += (nsin+r);
     }
   }
   return msgs;
@@ -44,34 +48,48 @@ tomo_msg_t** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks){
 
 int main (int argc, char *argv[])
 {
-  if(argc!=4) {
-    printf("Usage: %s <ip-to-bind=164.54.143.3> <starting-port=5560> number-of-workers\n", argv[0]);
+  if(argc!=3) {
+    printf("Usage: %s <ip-to-bind=164.54.143.3> <starting-port=5560>\n", argv[0]);
     exit(0);
   }
 
   int port = atoi(argv[2]);
-  int n_workers = atoi(argv[3]);
+  //int n_workers = atoi(argv[3]);
 
+  // Figure out how many ranks there is at the remote location
   void *context = zmq_ctx_new();
-  void **workers = malloc(n_workers*sizeof(**workers)); assert(workers!=NULL);
+  void *main_worker = zmq_socket(context, ZMQ_REP);
+  char addr[64];
+  snprintf(addr, 64, "tcp://%s:%d", argv[1], port++);
+  zmq_bind(main_worker, addr);
+  char *world_rank_str = s_recv(main_worker);
+  int n_workers = atoi(world_rank_str);
+  free(world_rank_str);
+  printf("Number of workers=%d\n", n_workers);
+  s_send(main_worker, "received");
 
+
+  // Setup projection data
   int dims[3]= {P, N, N};
   int16_t *data = malloc(sizeof(*data)*P*N*N); assert(data!=NULL);
   float *theta = malloc(P*sizeof(*theta)); assert(theta!=NULL);
   for(int i=0; i<P; ++i)
     for(int j=0; j<N; ++j)
-      for(int k=0; k<N; ++k) data[i*N*N+j*N+k]=k;
+      for(int k=0; k<N; ++k) data[i*N*N+j*N+k]=i*N*N+j*N+k;
 
   for(int i=0; i<P; ++i) theta[i]=(360./P)*i;
   
   // Prepare messages
-  tomo_msg_t **msgs = generate_msgs(data, dims, theta, n_workers); assert(msgs!=NULL);
+  tomo_msg_t ***msgs = generate_msgs(data, dims, theta, n_workers); assert(msgs!=NULL);
   free(data);
   free(theta);
 
-  // Check workers
-  for(int i=0; i<n_workers; ++i){
-    workers[i] = zmq_socket(context, ZMQ_REP);
+  // Setup system for other workers
+  void **workers = malloc(n_workers*sizeof(void*)); assert(workers!=NULL);
+  workers[0] = main_worker; // We already talked with the main worker
+  for(int i=1; i<n_workers; ++i){
+    void *worker = zmq_socket(context, ZMQ_REP);
+    workers[i] = worker;
     char addr[64];
     snprintf(addr, 64, "tcp://%s:%d", argv[1], port++);
     zmq_bind(workers[i], addr);
@@ -86,37 +104,48 @@ int main (int argc, char *argv[])
    free(str);
   }
 
-  // TODO: Below two loop is not implemented at client side yet!!
   // At this point I know every one is alive
   // Receive/Send msg/projections
   for(int i=0; i<dims[0]; ++i) {  // For each incoming projection
     for(int j=0; j<n_workers; ++j){ // For each partitioned projection sinogram
       // Assume data is ready
       // Prepare zmq message
+      printf("sending i=%d, j=%d\n", i, j);
       zmq_msg_t msg;
-      size_t msg_size = sizeof(msgs[i][j]) +            // struct size
-                        msgs[i][j].n_sinogram*          // remaining data size
-                        msgs[i][j].n_rays_per_proj_col*
-                        sizeof(*(msgs[i][j].data));
+      tomo_msg_t *curr_msg = msgs[i][j];
+      size_t msg_size = sizeof(*curr_msg) +            // struct size
+                        curr_msg->n_sinogram*          // remaining data size
+                        curr_msg->n_rays_per_proj_col*
+                        sizeof(*(curr_msg->data));
       int rc = zmq_msg_init_size(&msg, msg_size); assert(rc==0);
-      memcpy((void*)zmq_msg_data(&msg), (void*)&msgs[i][j], msg_size);
-      rc = zmq_msg_send(&msg, workers[i], 0); assert(rc==0);
-      // char msg[64];
-      // snprintf(msg, 64, "socket=%d worker_rank=%d; some projections!!", i, worker_ids[i]);
-      // s_send(workers[i], msg);
+      memcpy((void*)zmq_msg_data(&msg), (void*)curr_msg, msg_size);
+      rc = zmq_msg_send(&msg, workers[j], 0); assert(rc==msg_size);
     }
 
     // Check if workers received their corresponding projection rows
-    for(int i=0; i<n_workers; ++i){
-     char *str = s_recv(workers[i]);
-     printf("worker rank=%d on socket=%d replied: %s\n", worker_ids[i], i, str);
+    for(int k=0; k<n_workers; ++k){
+     char *str = s_recv(workers[k]);
+     printf("worker rank=%d on socket=%d replied: %s\n", worker_ids[k], k, str);
      free(str);
     }
     // Move on to next projection
   }
-  // All the projections are finished
-  // TODO: Send a finished signal to the workers before closing the sockets
 
+  // All the projections are finished
+  // Send a finished signal to the workers before closing the sockets
+  for(int i=0; i<n_workers; ++i){
+    zmq_msg_t msg;
+    tomo_msg_t msg_fin = { .type = TRACE_FIN };
+    int rc = zmq_msg_init_size(&msg, sizeof(msg_fin)); assert(rc==0);
+    memcpy((void*)zmq_msg_data(&msg), (void*)&msg_fin, sizeof(msg_fin));
+    rc = zmq_msg_send(&msg, workers[i], 0); assert(rc==sizeof(msg_fin));
+  }
+  // Check if workers received their fin messages
+  for(int i=0; i<n_workers; ++i){
+   char *str = s_recv(workers[i]);
+   printf("worker rank=%d on socket=%d replied: %s\n", worker_ids[i], i, str);
+   free(str);
+  }
 
   // Cleanup
   for(int i=0; i<n_workers; ++i){
@@ -125,6 +154,12 @@ int main (int argc, char *argv[])
   
   zmq_ctx_destroy (context);
   free(workers);
+
+  for(int i=0; i<P; ++i)
+    for(int j=0; j<n_workers; ++j)
+      free(msgs[i][j]);
+  for(int i=0; i<P; ++i) free(msgs[i]);
+  free(msgs);
 
   return 0;
 }
