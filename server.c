@@ -13,7 +13,8 @@
  * n_procs: number of processes
  *
  * returns msgs to be sent to the processes. &tomo_msg_t[P][ranks_msg]
- * */
+ *
+ */
 tomo_msg_t*** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks){
   int nsin = dims[1]/n_ranks;
   int c_remaining = dims[1]%n_ranks;
@@ -35,8 +36,10 @@ tomo_msg_t*** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks)
       msg->projection_id = i;
       msg->theta = theta[i];
       msg->beg_sinogram = curr_sinogram_id;
+      msg->tn_sinogram = dims[0];
       msg->n_sinogram = nsin+r;
-      msg->n_rays_per_proj_col = dims[2];
+      msg->n_rays_per_proj_row = dims[2];
+      msg->center = dims[2]/2.;
       memcpy(msg->data, (data+i*dims[2]*dims[2]) + // Current projection
                          curr_sinogram_id*dims[2], // Current sinogram
                         data_size);
@@ -59,7 +62,10 @@ tomo_msg_t*** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks)
  * tomo_msg_t** msgs: Ranks' messages. E.g. msgs[rank_id] points to rank_id's msg.  
  *
  */
-tomo_msg_t** generate_worker_msgs(int16_t *data, int dims[], int data_id, float theta, int n_ranks)
+tomo_msg_t** generate_worker_msgs(
+  int16_t *data, int dims[], 
+  int data_id, float theta, 
+  int tn_sinogram, int n_ranks)
 {
   int nsin = dims[0]/n_ranks;
   int remaining = dims[0]%n_ranks;
@@ -77,7 +83,8 @@ tomo_msg_t** generate_worker_msgs(int16_t *data, int dims[], int data_id, float 
     msg->theta = theta;
     msg->beg_sinogram = curr_sinogram_id;
     msg->n_sinogram = nsin+r;
-    msg->n_rays_per_proj_col = dims[1];
+    msg->tn_sinogram = tn_sinogram;
+    msg->n_rays_per_proj_row = dims[1];
     memcpy(msg->data, data+curr_sinogram_id*dims[1], // Current sinogram
                       data_size);
     msgs[i]=msg;
@@ -147,7 +154,9 @@ int main (int argc, char *argv[])
     int16_t *curr_projection = data + i*dims[1]*dims[2];
     int projection_dims[2] = { dims[1], dims[2] };
     float proj_theta = theta[i];
-    tomo_msg_t **worker_msgs = generate_worker_msgs(curr_projection, projection_dims, i, proj_theta, n_workers);
+    tomo_msg_t **worker_msgs = generate_worker_msgs(
+      curr_projection, projection_dims, 
+      i, proj_theta, dims[0], n_workers);
 
     /// Send partitioned projection data to workers 
     for(int j=0; j<n_workers; ++j){
@@ -155,7 +164,7 @@ int main (int argc, char *argv[])
       tomo_msg_t *curr_msg = worker_msgs[j];
       size_t msg_size = sizeof(*curr_msg) +            /// struct size
                         curr_msg->n_sinogram*          /// remaining data size
-                        curr_msg->n_rays_per_proj_col*
+                        curr_msg->n_rays_per_proj_row*
                         sizeof(*(curr_msg->data));
       zmq_msg_t msg;
       int rc = zmq_msg_init_size(&msg, msg_size); assert(rc==0);
