@@ -163,7 +163,8 @@ tomo_msg_t* tracemq_recv_msg(void *server){
   /// FIXME?: We put tomo_msg_t.size to calculate zmq message size before it is
   /// being sent. It is being only being used for sanity check at the receiver
   /// side. 
-  assert(zmq_msg_size(&zmsg)==((tomo_msg_t*)&zmsg)->size);
+  //printf("zmq_msg_size(&zmsg)=%zu; ((tomo_msg_t*)&zmsg)->size=%zu", zmq_msg_size(&zmsg), ((tomo_msg_t*)&zmsg)->size);
+  //assert(zmq_msg_size(&zmsg)==((tomo_msg_t*)&zmsg)->size);
 
   tomo_msg_t *msg = malloc(((tomo_msg_t*)&zmsg)->size);
   /// Zero-copy would have been better
