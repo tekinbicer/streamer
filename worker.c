@@ -77,22 +77,23 @@ int main (int argc, char *argv[])
     tracemq_free_msg(msg);
     ++seq;
 
-    tomo_msg_data_t *data_msg = tracemq_read_data(msg);
+    tomo_msg_data_t *data_msg = tracemq_read_data(dmsg);
     // ... do something with the data ...
     tracemq_print_data(data_msg, n_sinogram*n_rays_per_proj_row);
     tracemq_free_msg(dmsg);
   }
-  ++seq;
 
   assert(dmsg->type==TRACEMQ_MSG_FIN_REP); /// Last message must be fin
+  printf("seq_n=%zu; seq=%llu\n", dmsg->seq_n, seq);
   assert(dmsg->seq_n==seq);
   tracemq_free_msg(dmsg);
+  ++seq;
 
   // send fin received msg
   msg = malloc(sizeof(tomo_msg_t));
   msg->type=TRACEMQ_MSG_FIN_REP;
   msg->seq_n=seq;
-  msg->size=0;
+  msg->size=sizeof(tomo_msg_t);
   tracemq_send_msg(server, msg);
   tracemq_free_msg(msg);
   ++seq;
