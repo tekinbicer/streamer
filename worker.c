@@ -67,8 +67,8 @@ int main (int argc, char *argv[])
 
     // Do something with the data
     for(int i=0; i<msg->n_sinogram; ++i){
-      for(int j=0; j<msg->n_rays_per_proj_col; ++j){
-        printf("%hi ", msg->data[i*msg->n_rays_per_proj_col+j]);
+      for(int j=0; j<msg->n_rays_per_proj_row; ++j){
+        printf("%f ", msg->data[i*msg->n_rays_per_proj_row+j]);
       }
       printf("\n");
     }
