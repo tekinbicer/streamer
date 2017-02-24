@@ -9,7 +9,6 @@
 #define TRACEMQ_MSG_DATA_REP      0x00000020
 
 
-
 struct _tomo_msg_h_str {
   uint64_t seq_n;
   uint64_t type;
@@ -34,7 +33,7 @@ struct tomo_msg_data_info_req_str {
 struct _tomo_msg_data_str {
 	int projection_id;        // projection id
 	float theta;              // theta value of this projection
-	int center;               // center of the projecion
+	float center;               // center of the projecion
 	float data[];             // real projection data
 	// number of rays in data=n_sinogram*n_rays_per_proj_row (n_sinogram*n_rays_per_proj_row were given in req msg.)
 };
@@ -76,6 +75,14 @@ tomo_msg_t* tracemq_prepare_data_rep_msg(uint64_t seq_n,
 tomo_msg_data_t* tracemq_read_data(tomo_msg_t *msg){
   return (tomo_msg_data_info_t *) msg->data;
 }
+void tracemq_print_data(tomo_msg_data_info_t *msg, size_t data_count){
+  printf("projection_id=%u; theta=%f; center=%f\n", 
+    msg->projection_id, msg->theta, msg->center);
+  for(int i=0; i<data_count; ++i)
+    printf("%f", msg->data[i]);
+}
+
+
 
 tomo_msg_t* tracemq_prepare_data_info_rep_msg(uint64_t seq_n, 
                                               int beg_sinogram, int n_sinogram,
@@ -97,6 +104,11 @@ tomo_msg_t* tracemq_prepare_data_info_rep_msg(uint64_t seq_n,
 tomo_msg_data_info_rep_t* tracemq_read_data_info_rep(tomo_msg_t *msg){
   return (tomo_msg_data_info_rep_t *) msg->data;
 }
+void tracemq_print_data_info_rep_msg(tomo_msg_data_info_rep_msg *msg){
+  printf("Total # sinograms=%u; Beginning sinogram id=%u;"
+          "# assigned sinograms=%u; # rays per projection row=%u\n", 
+          msg->tn_sinograms, msg->beg_sinogram, msg->n_sinograms, msg->n_rays_per_proj_row);
+}
 
 tomo_msg_t* tracemq_prepare_data_info_req_msg(uint64_t seq_n, uint32_t comm_rank, uint32_t comm_size){
   uint64_t tot_msg_size = sizeof(tomo_msg_t)+sizeof(tomo_msg_data_info_req_t);
@@ -109,7 +121,7 @@ tomo_msg_t* tracemq_prepare_data_info_req_msg(uint64_t seq_n, uint32_t comm_rank
 
   return msg;
 }
-tomo_msg_data_info_req_t* tracemq_read_data_info_rep(tomo_msg_t *msg){
+tomo_msg_data_info_req_t* tracemq_read_data_info_req(tomo_msg_t *msg){
   return (tomo_msg_data_info_req_t *) msg->data;
 }
 
@@ -121,9 +133,35 @@ tomo_msg_t* tracemq_prepare_fin_msg(uint64_t seq_n){
   return msg;
 }
 
+void tracemq_send_msg(void *server, tomo_msg_t* msg){
+  zmq_msg_t *zmsg;
+  int rc = zmq_msg_init_size(zmsg, msg->size); assert(rc==0);
+  memcpy((void*)zmq_msg_data(zmsg), (void*)msg, msg->size);
+  rc = zmq_msg_send(zmsg, server, 0); assert(rc==msg_size);
+}
+
+tomo_msg_t* tracemq_recv_msg(void *server){
+  zmq_msg_t *zmsg;
+  int rc = zmq_msg_init(zmsg); assert(rc==0);
+  rc = zmq_msg_recv(zmsg, server, 0); assert(rc!=-1);
+  /// Message size and calculated total message size needst to be the same
+  /// FIXME?: We put tomo_msg_t.size to calculate zmq message size before it is
+  /// being sent. It is being only being used for sanity check at the receiver
+  /// side. 
+  assert(zmq_msg_size(zmq)==((tomo_msg_t*)zmsg)->size);
+
+  tomo_msg_t *msg = malloc(((tomo_msg_t*)zmsg)->size);
+  /// Zero-copy would have been better
+  memcpy(msg, zmq_msg_data(zmsg), zmq_msg_size(zmsg));
+  zmq_msg_close(zmsg);
+
+  return msg;
+}
+
 
 void tracemq_free_msg(tomo_msg_t *msg) {
   free(msg);
+  msg=NULL;
 }
 
 void tracemq_setup_msg_header(
