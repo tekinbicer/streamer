@@ -127,8 +127,9 @@ void tracemq_print_data_info_rep_msg(tomo_msg_data_info_rep_t *msg){
 
 tomo_msg_t* tracemq_prepare_data_info_req_msg(uint64_t seq_n, uint32_t comm_rank, uint32_t comm_size){
   uint64_t tot_msg_size = sizeof(tomo_msg_t)+sizeof(tomo_msg_data_info_req_t);
+  printf("total message size=%zu\n", tot_msg_size);
   tomo_msg_t *msg = malloc(tot_msg_size);
-  tracemq_setup_msg_header(msg, seq_n, tot_msg_size, TRACEMQ_MSG_DATAINFO_REQ);
+  tracemq_setup_msg_header(msg, seq_n, TRACEMQ_MSG_DATAINFO_REQ, tot_msg_size);
 
   tomo_msg_data_info_req_t *info = (tomo_msg_data_info_req_t *) msg->data;
   info->comm_rank = comm_rank;
