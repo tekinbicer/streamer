@@ -52,9 +52,9 @@ int main (int argc, char *argv[])
   msg = tracemq_recv_msg(server); assert(seq==msg->seq_n);
   tomo_msg_data_info_rep_t *info = tracemq_read_data_info_rep(msg);
   tracemq_print_data_info_rep_msg(info);
-  uint32_t tn_sinogram=info->tn_sinograms;
+  //uint32_t tn_sinogram=info->tn_sinograms;
   uint32_t n_sinogram=info->n_sinograms;
-  uint32_t beg_sinogram=info->beg_sinograms;
+  //uint32_t beg_sinogram=info->beg_sinogram;
   uint32_t n_rays_per_proj_row=info->n_rays_per_proj_row;
   // ... setup trace data structures ...
   tracemq_free_msg(msg);
