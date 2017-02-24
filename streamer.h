@@ -106,7 +106,7 @@ tomo_msg_t* tracemq_prepare_data_info_rep_msg(uint64_t seq_n,
 {
   uint64_t tot_msg_size = sizeof(tomo_msg_t)+sizeof(tomo_msg_data_info_rep_t);
   tomo_msg_t *msg = malloc(tot_msg_size);
-  tracemq_setup_msg_header(msg, seq_n, tot_msg_size, TRACEMQ_MSG_DATAINFO_REP);
+  tracemq_setup_msg_header(msg, seq_n, TRACEMQ_MSG_DATAINFO_REP, tot_msg_size);
 
   tomo_msg_data_info_rep_t *info = (tomo_msg_data_info_rep_t *) msg->data;
   info->tn_sinograms = tn_sinograms;
@@ -144,7 +144,7 @@ tomo_msg_data_info_req_t* tracemq_read_data_info_req(tomo_msg_t *msg){
 tomo_msg_t* tracemq_prepare_fin_msg(uint64_t seq_n){
   uint64_t tot_msg_size = sizeof(tomo_msg_t);
   tomo_msg_t *msg = malloc(tot_msg_size);
-  tracemq_setup_msg_header(msg, seq_n, tot_msg_size, TRACEMQ_MSG_FIN_REP);
+  tracemq_setup_msg_header(msg, seq_n, TRACEMQ_MSG_FIN_REP, tot_msg_size);
 
   return msg;
 }
