@@ -80,6 +80,7 @@ int main (int argc, char *argv[])
   tomo_msg_data_info_req_t* info = tracemq_read_data_info_req(msg);
   /// Setup worker data structures
   int n_workers = info->comm_size;
+  printf("n_workers=%d\n",n_workers);
   int worker_ids[n_workers];
   void **workers = malloc(n_workers*sizeof(void*)); assert(workers!=NULL);
   worker_ids[0] = info->comm_rank;
@@ -118,7 +119,7 @@ int main (int argc, char *argv[])
   ++seq;
 
   /// recieve ready message
-  for(int i=1; i<n_workers; ++i){
+  for(int i=0; i<n_workers; ++i){
    msg = tracemq_recv_msg(workers[i]);
    assert(msg->type==TRACEMQ_MSG_DATA_REQ);
    assert(seq==msg->seq_n);
@@ -166,7 +167,7 @@ int main (int argc, char *argv[])
   /// All the projections are finished
   for(int i=0; i<n_workers; ++i){
     zmq_msg_t msg;
-    tomo_msg_t msg_fin = { .type = TRACEMQ_MSG_FIN_REP};
+    tomo_msg_t msg_fin = { .seq_n=seq, .type = TRACEMQ_MSG_FIN_REP, .size=sizeof(tomo_msg_t)};
     int rc = zmq_msg_init_size(&msg, sizeof(msg_fin)); assert(rc==0);
     memcpy((void*)zmq_msg_data(&msg), (void*)&msg_fin, sizeof(msg_fin));
     rc = zmq_msg_send(&msg, workers[i], 0); assert(rc==sizeof(msg_fin));
