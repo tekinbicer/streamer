@@ -94,7 +94,8 @@ void tracemq_print_data(tomo_msg_data_t *msg, size_t data_count){
   printf("projection_id=%u; theta=%f; center=%f\n", 
     msg->projection_id, msg->theta, msg->center);
   for(size_t i=0; i<data_count; ++i)
-    printf("%f", msg->data[i]);
+    printf("%f ", msg->data[i]);
+  printf("\n");
 }
 
 
