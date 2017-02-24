@@ -149,26 +149,26 @@ tomo_msg_t* tracemq_prepare_fin_msg(uint64_t seq_n){
 }
 
 void tracemq_send_msg(void *server, tomo_msg_t* msg){
-  zmq_msg_t *zmsg = NULL;
-  int rc = zmq_msg_init_size(zmsg, msg->size); assert(rc==0);
-  memcpy((void*)zmq_msg_data(zmsg), (void*)msg, msg->size);
-  rc = zmq_msg_send(zmsg, server, 0); assert(rc==(int)msg->size);
+  zmq_msg_t zmsg;
+  int rc = zmq_msg_init_size(&zmsg, msg->size); assert(rc==0);
+  memcpy((void*)zmq_msg_data(&zmsg), (void*)msg, msg->size);
+  rc = zmq_msg_send(&zmsg, server, 0); assert(rc==(int)msg->size);
 }
 
 tomo_msg_t* tracemq_recv_msg(void *server){
-  zmq_msg_t *zmsg=NULL;
-  int rc = zmq_msg_init(zmsg); assert(rc==0);
-  rc = zmq_msg_recv(zmsg, server, 0); assert(rc!=-1);
+  zmq_msg_t zmsg;
+  int rc = zmq_msg_init(&zmsg); assert(rc==0);
+  rc = zmq_msg_recv(&zmsg, server, 0); assert(rc!=-1);
   /// Message size and calculated total message size needst to be the same
   /// FIXME?: We put tomo_msg_t.size to calculate zmq message size before it is
   /// being sent. It is being only being used for sanity check at the receiver
   /// side. 
-  assert(zmq_msg_size(zmsg)==((tomo_msg_t*)zmsg)->size);
+  assert(zmq_msg_size(&zmsg)==((tomo_msg_t*)&zmsg)->size);
 
-  tomo_msg_t *msg = malloc(((tomo_msg_t*)zmsg)->size);
+  tomo_msg_t *msg = malloc(((tomo_msg_t*)&zmsg)->size);
   /// Zero-copy would have been better
-  memcpy(msg, zmq_msg_data(zmsg), zmq_msg_size(zmsg));
-  zmq_msg_close(zmsg);
+  memcpy(msg, zmq_msg_data(&zmsg), zmq_msg_size(&zmsg));
+  zmq_msg_close(&zmsg);
 
   return msg;
 }
