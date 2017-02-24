@@ -167,7 +167,7 @@ tomo_msg_t* tracemq_recv_msg(void *server){
   //printf("zmq_msg_size(&zmsg)=%zu; ((tomo_msg_t*)&zmsg)->size=%zu", zmq_msg_size(&zmsg), ((tomo_msg_t*)&zmsg)->size);
   //assert(zmq_msg_size(&zmsg)==((tomo_msg_t*)&zmsg)->size);
 
-  tomo_msg_t *msg = malloc(((tomo_msg_t*)&zmsg)->size);
+  tomo_msg_t *msg = malloc(((tomo_msg_t*)zmq_msg_data(&zmsg))->size);
   /// Zero-copy would have been better
   memcpy(msg, zmq_msg_data(&zmsg), zmq_msg_size(&zmsg));
   zmq_msg_close(&zmsg);
