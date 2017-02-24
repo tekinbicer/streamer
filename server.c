@@ -15,7 +15,7 @@
  * returns msgs to be sent to the processes. &tomo_msg_t[P][ranks_msg]
  *
  */
-tomo_msg_t*** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks){
+tomo_msg_t*** generate_msgs(float *data, int *dims, float *theta, int n_ranks){
   int nsin = dims[1]/n_ranks;
   int c_remaining = dims[1]%n_ranks;
 
@@ -63,7 +63,7 @@ tomo_msg_t*** generate_msgs(int16_t *data, int *dims, float *theta, int n_ranks)
  *
  */
 tomo_msg_t** generate_worker_msgs(
-  int16_t *data, int dims[], 
+  float *data, int dims[], 
   int data_id, float theta, 
   int tn_sinogram, int n_ranks)
 {
@@ -118,11 +118,11 @@ int main (int argc, char *argv[])
 
   /// Setup projection data
   int dims[3]= {P, N, N};
-  int16_t *data = malloc(sizeof(*data)*P*N*N); assert(data!=NULL);
+  float *data = malloc(sizeof(*data)*P*N*N); assert(data!=NULL);
   float *theta = malloc(P*sizeof(*theta)); assert(theta!=NULL);
   for(int i=0; i<P; ++i)
     for(int j=0; j<N; ++j)
-      for(int k=0; k<N; ++k) data[i*N*N+j*N+k]=i*N*N+j*N+k;
+      for(int k=0; k<N; ++k) data[i*N*N+j*N+k]=1.*i*N*N+j*N+k;
   for(int i=0; i<P; ++i) theta[i]=(360./P)*i;
   
 
@@ -151,7 +151,7 @@ int main (int argc, char *argv[])
   /// Distribute data to workers
   for(int i=0; i<dims[0]; ++i) {  // For each incoming projection
     /// Generate worker messages
-    int16_t *curr_projection = data + i*dims[1]*dims[2];
+    float *curr_projection = data + i*dims[1]*dims[2];
     int projection_dims[2] = { dims[1], dims[2] };
     float proj_theta = theta[i];
     tomo_msg_t **worker_msgs = generate_worker_msgs(
