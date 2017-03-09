@@ -5,6 +5,25 @@
 #define N 16
 #define P 18
 
+#define NX 256
+#define NY 1
+#define NZ 512
+
+float* read_file(char *fn, size_t s){
+  float *data = malloc(sizeof(float)*s);
+  FILE *f;
+  f = fopen(fn, "rb");
+  if(!f){
+    printf("Unable to open file!\n");
+    return NULL;
+  }
+  fread(data, sizeof(float), s, f);
+
+  fclose(f);
+  return data;
+}
+
+
 tomo_msg_t** generate_tracemq_worker_msgs(
   float *data, int dims[], 
   int data_id, float theta, 
@@ -63,13 +82,19 @@ int main (int argc, char *argv[])
   void *context = zmq_ctx_new();
 
   /// Setup projection data
-  int dims[3]= {P, N, N};
-  float *data = malloc(sizeof(*data)*P*N*N); assert(data!=NULL);
-  float *theta = malloc(P*sizeof(*theta)); assert(theta!=NULL);
-  for(int i=0; i<P; ++i)
-    for(int j=0; j<N; ++j)
-      for(int k=0; k<N; ++k) data[i*N*N+j*N+k]=1.*i*N*N+j*N+k;
-  for(int i=0; i<P; ++i) theta[i]=(360./P)*i;
+  //int dims[3]= {P, N, N};
+  //float *data = malloc(sizeof(*data)*P*N*N); assert(data!=NULL);
+  //float *theta = malloc(P*sizeof(*theta)); assert(theta!=NULL);
+  //for(int i=0; i<P; ++i)
+  //  for(int j=0; j<N; ++j)
+  //    for(int k=0; k<N; ++k) data[i*N*N+j*N+k]=1.*i*N*N+j*N+k;
+  //for(int i=0; i<P; ++i) theta[i]=(180./P)*i;
+  int dims[3]= {NZ, NY, NX};
+  float *data = read_file("projs", NZ*NY*NX); 
+  float *theta = read_file("theta", NZ);
+  for(int i=0; i<NZ; ++i){
+    printf("proj=%d theta=%.3f; \n",i, theta[i]);
+  }
   
   /// Figure out how many ranks there is at the remote location
   void *main_worker = zmq_socket(context, ZMQ_REP);
