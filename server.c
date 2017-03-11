@@ -1,99 +1,41 @@
-//   Reply server in C
-#include "zhelpers.h"
-#include "streamer.h"
-
-#define N 16
-#define P 18
-
-#define NX 256
-#define NY 1
-#define NZ 512
-
-float* read_file(char *fn, size_t s){
-  float *data = malloc(sizeof(float)*s);
-  FILE *f;
-  f = fopen(fn, "rb");
-  if(!f){
-    printf("Unable to open file!\n");
-    return NULL;
-  }
-  fread(data, sizeof(float), s, f);
-
-  fclose(f);
-  return data;
-}
-
-
-tomo_msg_t** generate_tracemq_worker_msgs(
-  float *data, int dims[], 
-  int data_id, float theta, 
-  int n_ranks, uint64_t seq)
-{
-  int nsin = dims[0]/n_ranks;
-  int remaining = dims[0]%n_ranks;
-
-  tomo_msg_t **msgs = malloc(n_ranks*sizeof(tomo_msg_t*));
-
-  int curr_sinogram_id = 0;
-  for(int i=0; i<n_ranks; ++i){
-    int r = ((remaining--) > 0) ? 1 : 0;
-    size_t data_size = sizeof(*data)*(nsin+r)*dims[1];
-    tomo_msg_t *msg = tracemq_prepare_data_rep_msg(seq, 
-                              data_id, theta, dims[1]/2., data_size, 
-                              data+curr_sinogram_id*dims[1]);
-    msgs[i] = msg;
-    curr_sinogram_id += (nsin+r);
-  }
-  return msgs;
-}
-
-tomo_msg_data_info_rep_t assign_data(
-  uint32_t comm_rank, int comm_size, 
-  int tot_sino, int tot_cols)
-{
-  uint32_t nsino = tot_sino/comm_size;
-  uint32_t remaining = tot_sino%comm_size;
-
-  int r = (comm_rank<remaining) ? 1 : 0;
-  int my_nsino = r+nsino;
-  int beg_sino = (comm_rank<remaining) ? (1+nsino)*comm_rank : 
-                                        (1+nsino)*remaining + nsino*(comm_rank-remaining);
-  
-  tomo_msg_data_info_rep_t info_rep;
-  info_rep.tn_sinograms = tot_sino;
-  info_rep.beg_sinogram = beg_sino;
-  info_rep.n_sinograms = my_nsino;
-  info_rep.n_rays_per_proj_row = tot_cols;
-
-  return info_rep;
-}
+//#include "zhelpers.h"
+#include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "mock_data_acq.h"
+#include "trace_streamer.h"
+#include "zmq.h"
 
 int main (int argc, char *argv[])
 {
-  if(argc!=3) {
-    printf("Usage: %s <ip-to-bind=164.54.143.3> <starting-port=5560>\n", argv[0]);
+  if(argc!=7) {
+    printf("Usage: %s <ip-to-bind=164.54.143.3> "
+                      "<starting-port=5560> "
+                      "<data-file=data> "
+                      "<interval-sec=0> "
+                      "<interval-nanosec=500000000> "
+                      "<subset=0> \n", argv[0]);
     exit(0);
   }
 
+  /// Parse arguments
   int port = atoi(argv[2]);
-
+  char *fp = argv[3];
+  int interval_sec = atoi(argv[4]);
+  long long interval_nanosec = atoll(argv[5]);
+  int nsubsets = atoi(argv[6]);
 
   /// Setup zmq
   void *context = zmq_ctx_new();
 
-  /// Setup projection data
-  //int dims[3]= {P, N, N};
-  //float *data = malloc(sizeof(*data)*P*N*N); assert(data!=NULL);
-  //float *theta = malloc(P*sizeof(*theta)); assert(theta!=NULL);
-  //for(int i=0; i<P; ++i)
-  //  for(int j=0; j<N; ++j)
-  //    for(int k=0; k<N; ++k) data[i*N*N+j*N+k]=1.*i*N*N+j*N+k;
-  //for(int i=0; i<P; ++i) theta[i]=(180./P)*i;
-  int dims[3]= {NZ, NY, NX};
-  float *data = read_file("projs", NZ*NY*NX); 
-  float *theta = read_file("theta", NZ);
-  for(int i=0; i<NZ; ++i){
-    printf("proj=%d theta=%.3f; \n",i, theta[i]);
+  /// Setup mock data acquisition
+  mock_interval_t interval = { interval_sec, interval_nanosec };
+  dacq_file_t *dacq_file = mock_dacq_file(fp, interval);
+  if(nsubsets>0) {
+    dacq_file_t *ndacq_file = mock_dacq_interleaved(dacq_file, nsubsets);
+    mock_dacq_file_delete(dacq_file);
+    dacq_file = ndacq_file;
   }
   
   /// Figure out how many ranks there is at the remote location
@@ -133,11 +75,11 @@ int main (int argc, char *argv[])
 
   /// Distribute data info
   for(int i=0; i<n_workers; ++i){
-   tomo_msg_data_info_rep_t info = 
-      assign_data(worker_ids[i], n_workers, dims[1], dims[2]);
+   tomo_msg_data_info_rep_t info = assign_data(worker_ids[i], n_workers, 
+                                      dacq_file->dims[1], dacq_file->dims[2]);
    tomo_msg_t *msg = tracemq_prepare_data_info_rep_msg(seq, 
-     info.beg_sinogram, info.n_sinograms, 
-     info.n_rays_per_proj_row, info.tn_sinograms);
+                         info.beg_sinogram, info.n_sinograms, 
+                         info.n_rays_per_proj_row, info.tn_sinograms);
    tracemq_send_msg(workers[i], msg);
    tracemq_free_msg(msg);
   }
@@ -152,31 +94,31 @@ int main (int argc, char *argv[])
   }
   ++seq;
 
-
-  /// Start distributing data to workers
-  for(int i=0; i<dims[0]; ++i) {  // For each incoming projection
-    float *curr_projection = data + i*dims[1]*dims[2];
-    int projection_dims[2] = { dims[1], dims[2] };
-    float proj_theta = theta[i];
+  /// Simulate projection generation
+  ts_proj_data_t *proj=NULL;
+  while((proj=mock_dacq_read(dacq_file)) != NULL){
+    printf("Sending proj: %d; id=%d\n", dacq_file->curr_proj_index, proj->id);
+    float center = proj->dims[1]/2. + 1;  /// Default center is middle of columns
     tomo_msg_t **worker_msgs = generate_tracemq_worker_msgs(
-      curr_projection, projection_dims, 
-      i, proj_theta, n_workers, seq);
+                                  proj->data, proj->dims, proj->id, 
+                                  proj->theta, n_workers, center, seq);
+    free(proj); proj=NULL;
 
-    /// Send partitioned projection data to workers 
-    for(int j=0; j<n_workers; ++j){
+    /// Send data to workers
+    for(int i=0; i<n_workers; ++i){
       /// Prepare zmq message
-      tomo_msg_t *curr_msg = worker_msgs[j];
+      tomo_msg_t *curr_msg = worker_msgs[i];
                         
       zmq_msg_t msg;
       int rc = zmq_msg_init_size(&msg, curr_msg->size); assert(rc==0);
       memcpy((void*)zmq_msg_data(&msg), (void*)curr_msg, curr_msg->size);
-      rc = zmq_msg_send(&msg, workers[j], 0); assert(rc==(int)curr_msg->size);
+      rc = zmq_msg_send(&msg, workers[i], 0); assert(rc==(int)curr_msg->size);
     }
     ++seq;
-    
+
     /// Check if workers received their corresponding data chunks
-    for(int j=0; j<n_workers; ++j){
-      msg = tracemq_recv_msg(workers[j]);
+    for(int i=0; i<n_workers; ++i){
+      msg = tracemq_recv_msg(workers[i]);
       assert(msg->type==TRACEMQ_MSG_DATA_REQ);
       assert(msg->seq_n==seq);
       tracemq_free_msg(msg);
@@ -184,21 +126,24 @@ int main (int argc, char *argv[])
     ++seq;
 
     /// Clean-up data chunks
-    for(int j=0; j<n_workers; ++j)
-      free(worker_msgs[j]);
+    for(int i=0; i<n_workers; ++i)
+      free(worker_msgs[i]);
     free(worker_msgs);
   }
+
+  /// Done with the data, clean-up resources
+  mock_dacq_file_delete(dacq_file);
 
   /// All the projections are finished
   for(int i=0; i<n_workers; ++i){
     zmq_msg_t msg;
-    tomo_msg_t msg_fin = { .seq_n=seq, .type = TRACEMQ_MSG_FIN_REP, .size=sizeof(tomo_msg_t)};
+    tomo_msg_t msg_fin = {.seq_n=seq, .type = TRACEMQ_MSG_FIN_REP, 
+                          .size=sizeof(tomo_msg_t) };
     int rc = zmq_msg_init_size(&msg, sizeof(msg_fin)); assert(rc==0);
     memcpy((void*)zmq_msg_data(&msg), (void*)&msg_fin, sizeof(msg_fin));
     rc = zmq_msg_send(&msg, workers[i], 0); assert(rc==sizeof(msg_fin));
   }
   ++seq;
-  
   
   // Receive worker fin reply
   for(int j=0; j<n_workers; ++j){
@@ -215,9 +160,6 @@ int main (int argc, char *argv[])
   }
   zmq_ctx_destroy (context);
   free(workers);
-
-  free(data);
-  free(theta);
 
   return 0;
 }

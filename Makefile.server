@@ -2,7 +2,7 @@
 CC = gcc
 
 # Flags
-CFLAGS = -std=gnu99 -O2 -Wall -Wextra
+CFLAGS = -std=gnu99 -O0 -Wall -Wextra
 CFLAGS += -g -fPIC
 
 LIBS = -lzmq
@@ -10,8 +10,7 @@ LIBDIRS = -L/home/bicer/local/lib
 INCLUDES = -I/home/bicer/local/include
 
 # Executable/reconstruction objects
-SERVER_OBJS = server.o
-COMMON_OBJS =
+SERVER_OBJS = server.o mock_data_acq.o trace_streamer.o
 
 # Executables
 PROGS = server
@@ -21,10 +20,16 @@ PROGS = server
 all: $(PROGS)
 
 server: $(COMMON_OBJS) $(SERVER_OBJS)
-	$(CC) $(CFLAGS) -o $@ $(SERVER_OBJS) $(COMMON_OBJS) $(INCLUDES) $(LIBDIRS) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $(SERVER_OBJS) $(INCLUDES) $(LIBDIRS) $(LIBS)
 
 server.o: server.c
 	$(CC) $(CFLAGS) -c server.c $(INCLUDES)
+
+mock_data_acq.o: mock_data_acq.c mock_data_acq.h
+	$(CC) $(CFLAGS) -c mock_data_acq.c $(INCLUDES)
+
+trace_streamer.o: trace_streamer.c trace_streamer.h
+	$(CC) $(CFLAGS) -c trace_streamer.c $(INCLUDES)
 
 clean:
 	rm -f $(PROGS) *.o *.a *~ *.lst *.tmp .pure *.bak *.log
