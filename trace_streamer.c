@@ -1,10 +1,9 @@
-#include "trace_streamer.h"
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
 #include "zmq.h"
+#include "trace_streamer.h"
 
 void tracemq_free_msg(tomo_msg_t *msg) {
   free(msg);
