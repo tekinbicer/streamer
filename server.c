@@ -98,7 +98,7 @@ int main (int argc, char *argv[])
   ts_proj_data_t *proj=NULL;
   while((proj=mock_dacq_read(dacq_file)) != NULL){
     printf("Sending proj: %d; id=%d\n", dacq_file->curr_proj_index, proj->id);
-    float center = proj->dims[1]/2. + 1;  /// Default center is middle of columns
+    float center = proj->dims[1]/2.;  /// Default center is middle of columns
     tomo_msg_t **worker_msgs = generate_tracemq_worker_msgs(
                                   proj->data, proj->dims, proj->id, 
                                   proj->theta, n_workers, center, seq);
