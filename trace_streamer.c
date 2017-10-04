@@ -41,6 +41,8 @@ tomo_msg_t* tracemq_prepare_data_rep_msg( uint64_t seq_n, int projection_id,
   msg->theta = theta;
   msg->center = center;
   memcpy(msg->data, data, data_size);
+  
+  printf("theta=%f\n", theta);
 
   return msg_h;
 }

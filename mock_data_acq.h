@@ -43,10 +43,17 @@ dacq_file_t* mock_dacq_file(char *fp,
 dacq_file_t* mock_dacq_interleaved( dacq_file_t *dacqd, 
                                     int nsubset);
 
+dacq_file_t* mock_dacq_interleaved_equally(dacq_file_t *dacqd);
+
 /* Simulates data acquisition, returns read data. */
 ts_proj_data_t* mock_dacq_read(dacq_file_t *df);
 
 /* Frees resources */
 void mock_dacq_file_delete(dacq_file_t *df);
+
+void extract_sinogram(char *fp,
+                      mock_interval_t interval);
+
+
 
 #endif    // _STREAMER_MOCK_DATA_ACQ_H

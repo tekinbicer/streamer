@@ -6,6 +6,25 @@
 #include "mock_data_acq.h"
 #include "trace_streamer.h"
 #include "zmq.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <time.h>
+
+int64_t timestamp_now (void)
+{
+  struct timeval tv;
+  gettimeofday (&tv, NULL);
+  return (int64_t) tv.tv_sec * CLOCKS_PER_SEC + tv.tv_usec;
+}
+
+double timestamp_to_seconds (int64_t timestamp)
+{
+  return timestamp / (double) CLOCKS_PER_SEC;
+}
+
 
 int main (int argc, char *argv[])
 {
@@ -32,11 +51,16 @@ int main (int argc, char *argv[])
   /// Setup mock data acquisition
   mock_interval_t interval = { interval_sec, interval_nanosec };
   dacq_file_t *dacq_file = mock_dacq_file(fp, interval);
-  if(nsubsets>0) {
-    dacq_file_t *ndacq_file = mock_dacq_interleaved(dacq_file, nsubsets);
+
+
+  //extract_sinogram(fp, interval);
+  if(nsubsets!=0) {
+    dacq_file_t *ndacq_file = (nsubsets>0) ? 
+                mock_dacq_interleaved(dacq_file, nsubsets) :
+                mock_dacq_interleaved_equally(dacq_file);
     mock_dacq_file_delete(dacq_file);
     dacq_file = ndacq_file;
-  }
+  } 
   
   /// Figure out how many ranks there is at the remote location
   void *main_worker = zmq_socket(context, ZMQ_REP);
@@ -95,6 +119,7 @@ int main (int argc, char *argv[])
   ++seq;
 
   /// Simulate projection generation
+  int64_t start_proj_gen_time = timestamp_now ();
   ts_proj_data_t *proj=NULL;
   while((proj=mock_dacq_read(dacq_file)) != NULL){
     printf("Sending proj: %d; id=%d\n", dacq_file->curr_proj_index, proj->id);
@@ -112,7 +137,7 @@ int main (int argc, char *argv[])
       zmq_msg_t msg;
       int rc = zmq_msg_init_size(&msg, curr_msg->size); assert(rc==0);
       memcpy((void*)zmq_msg_data(&msg), (void*)curr_msg, curr_msg->size);
-      rc = zmq_msg_send(&msg, workers[i], 0); assert(rc==(int)curr_msg->size);
+      rc = zmq_msg_send(&msg, workers[i], ZMQ_DONTWAIT); assert(rc==(int)curr_msg->size);
     }
     ++seq;
 
@@ -130,6 +155,11 @@ int main (int argc, char *argv[])
       free(worker_msgs[i]);
     free(worker_msgs);
   }
+  float diff_time = timestamp_now()-start_proj_gen_time ;
+  printf ("Projection generation time= %f; Current prj index=%d; Sustained proj/sec=%f\n", 
+      timestamp_to_seconds(diff_time), 
+      dacq_file->curr_proj_index, 
+      dacq_file->curr_proj_index/timestamp_to_seconds(diff_time));
 
   /// Done with the data, clean-up resources
   mock_dacq_file_delete(dacq_file);
