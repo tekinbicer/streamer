@@ -102,7 +102,7 @@ dacq_file_t* mock_dacq_file(char *fp,
     return NULL;
   }
   /// Print first ten projection data values
-  for(int i=0; i<10; ++i) printf("val[%d]=%f;\n", i, pdata[i]);
+  for(int i=0; i<10; ++i) printf("val[%d]=%.10e;\n", i, pdata[i]);
 
   /// Read theta values
   int tcount = dims[0]; 
